@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tokenising Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d0d0d;--surface:#141414;--card:#1a1a1a;--border:#2a2a2a;
+      --accent:#c8f135;--accent2:#7effd4;--accent3:#ff6b6b;
+      --text:#f0f0f0;--muted:#666;--mono:'JetBrains Mono',monospace;--head:'Syne',sans-serif;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;padding:0}
+    .app{max-width:780px;margin:0 auto;padding:48px 24px 80px}
+    .header{margin-bottom:40px}
+    .title{font-family:var(--head);font-size:32px;font-weight:800;letter-spacing:-0.5px;color:var(--text)}
+    .title span{color:var(--accent)}
+    .subtitle{font-size:11px;color:var(--muted);margin-top:6px;letter-spacing:1px;text-transform:uppercase}
+
+    .input-zone{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:12px;transition:border-color .2s}
+    .input-zone:focus-within{border-color:var(--accent)}
+    .input-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+    .expr-input{width:100%;background:transparent;border:none;outline:none;font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);caret-color:var(--accent)}
+    .expr-input::placeholder{color:#333;font-weight:400}
+
+    .examples{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+    .ex-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);width:100%;margin-bottom:2px}
+    .chip{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-family:var(--mono);font-size:12px;color:#aaa;cursor:pointer;transition:all .15s}
+    .chip:hover{border-color:var(--accent);color:var(--accent);background:#1e2200}
+
+    .error-box{background:#1a0a0a;border:1px solid #4a1a1a;border-radius:8px;padding:12px 16px;font-size:13px;color:var(--accent3);margin-bottom:20px;display:none}
+
+    .section{margin-bottom:24px}
+    .sec-head{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+    .sec-num{font-family:var(--head);font-size:11px;font-weight:700;color:var(--bg);background:var(--accent);padding:2px 8px;border-radius:4px;letter-spacing:.5px}
+    .sec-title{font-family:var(--head);font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+
+    .tokens-grid{display:flex;flex-wrap:wrap;gap:8px}
+    .token{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 16px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform .15s}
+    .token:hover{transform:translateY(-2px)}
+    .token.NUM{border-color:#4a7a00;background:#141f00}
+    .token.OP{border-color:#005f7a;background:#001a20}
+    .token.PAREN{border-color:#5a2a7a;background:#170d22}
+    .token.EOF{border-color:#333;background:#111}
+    .tok-type{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+    .token.NUM .tok-type{color:#7fc400}
+    .token.OP .tok-type{color:var(--accent2)}
+    .token.PAREN .tok-type{color:#b87eff}
+    .tok-val{font-size:16px;font-weight:700;color:var(--text)}
+    .tok-pos{font-size:9px;color:#444;margin-top:1px}
+
+    .parse-steps{display:flex;flex-direction:column;gap:6px}
+    .step{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;font-size:13px;animation:fadeIn .3s ease both}
+    @keyframes fadeIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    .step-icon{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+    .step-text{color:#ccc;flex:1;line-height:1.5}
+    .step-text b{color:var(--text);font-weight:600}
+    .step-text .num{color:#a0d000}
+    .step-text .op{color:var(--accent2)}
+
+    .result-box{background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:24px 28px;display:flex;align-items:center;justify-content:space-between}
+    .res-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+    .res-expr{font-size:13px;color:#666;margin-top:4px}
+    .res-val{font-family:var(--head);font-size:42px;font-weight:800;color:var(--accent);letter-spacing:-1px}
+
+    .empty{text-align:center;padding:60px 20px;color:#333;font-size:13px}
+
+    .footer{margin-top:60px;text-align:center;font-size:11px;color:#333;letter-spacing:1px;text-transform:uppercase}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="title">Tokenising <span>Calculator</span></div>
+    <div class="subtitle">Lexer → Token Stream → Parser → Result</div>
+  </div>
+
+  <div class="input-zone">
+    <div class="input-label">Expression</div>
+    <input class="expr-input" id="expr" placeholder="e.g.  (3 + 4) * 2 - 1" autocomplete="off" spellcheck="false"/>
+  </div>
+
+  <div class="examples">
+    <div class="ex-label">Try these</div>
+    <div class="chip" onclick="setExpr('3 + 4 * 2')">3 + 4 * 2</div>
+    <div class="chip" onclick="setExpr('(3 + 4) * 2')">(3 + 4) * 2</div>
+    <div class="chip" onclick="setExpr('10 / (2 + 3)')">10 / (2 + 3)</div>
+    <div class="chip" onclick="setExpr('-5 + 3 * (2 - 8)')">-5 + 3 * (2 - 8)</div>
+    <div class="chip" onclick="setExpr('100 / 4 / 5')">100 / 4 / 5</div>
+    <div class="chip" onclick="setExpr('((2+3)*4)-10/2')">((2+3)*4)-10/2</div>
+  </div>
+
+  <div class="error-box" id="err"></div>
+  <div id="output"></div>
+
+  <div class="footer">Built with a custom lexer &amp; recursive descent parser</div>
+</div>
+
+<script>
+const TokenType = {
+  NUMBER:'NUMBER', PLUS:'PLUS', MINUS:'MINUS',
+  MULTIPLY:'MULTIPLY', DIVIDE:'DIVIDE',
+  LPAREN:'LPAREN', RPAREN:'RPAREN', EOF:'EOF'
+};
+
+function lex(text){
+  const tokens=[];
+  let i=0;
+  while(i<text.length){
+    const ch=text[i];
+    if(ch===' '||ch==='\t'){i++;continue;}
+    if(ch>='0'&&ch<='9'||ch==='.'){
+      let start=i;
+      while(i<text.length&&(text[i]>='0'&&text[i]<='9'||text[i]==='.')){i++;}
+      tokens.push({type:TokenType.NUMBER,value:parseFloat(text.slice(start,i)),raw:text.slice(start,i),pos:start});
+      continue;
+    }
+    const map={'+':TokenType.PLUS,'-':TokenType.MINUS,'*':TokenType.MULTIPLY,'/':TokenType.DIVIDE,'(':TokenType.LPAREN,')':TokenType.RPAREN};
+    if(map[ch]){tokens.push({type:map[ch],value:ch,raw:ch,pos:i});i++;continue;}
+    throw new Error(`Unknown character '${ch}' at position ${i}`);
+  }
+  tokens.push({type:TokenType.EOF,value:'',raw:'EOF',pos:i});
+  return tokens;
+}
+
+function parse(tokens){
+  let pos=0;
+  const steps=[];
+  function cur(){return tokens[pos];}
+  function eat(t){
+    if(cur().type!==t)throw new Error(`Expected ${t} but got ${cur().type} at pos ${cur().pos}`);
+    return tokens[pos++];
+  }
+  function expr(){
+    let left=term();
+    while(cur().type===TokenType.PLUS||cur().type===TokenType.MINUS){
+      const op=cur().value; pos++;
+      const right=term();
+      const prev=left;
+      left=op==='+'?prev+right:prev-right;
+      steps.push({icon:'±',text:`<b>${fmt(prev)}</b> <span class="op">${op}</span> <b>${fmt(right)}</b> = <span class="num">${fmt(left)}</span>`});
+    }
+    return left;
+  }
+  function term(){
+    let left=factor();
+    while(cur().type===TokenType.MULTIPLY||cur().type===TokenType.DIVIDE){
+      const op=cur().value; pos++;
+      const right=factor();
+      if(op==='/'&&right===0)throw new Error('Division by zero');
+      const prev=left;
+      left=op==='*'?prev*right:prev/right;
+      steps.push({icon:'×',text:`<b>${fmt(prev)}</b> <span class="op">${op}</span> <b>${fmt(right)}</b> = <span class="num">${fmt(left)}</span>`});
+    }
+    return left;
+  }
+  function factor(){
+    const t=cur();
+    if(t.type===TokenType.NUMBER){pos++;return t.value;}
+    if(t.type===TokenType.LPAREN){
+      eat(TokenType.LPAREN);
+      steps.push({icon:'(',text:`Opening parenthesis — evaluating inner expression`});
+      const v=expr();
+      eat(TokenType.RPAREN);
+      steps.push({icon:')',text:`Closing parenthesis — inner result: <span class="num">${fmt(v)}</span>`});
+      return v;
+    }
+    if(t.type===TokenType.MINUS){
+      pos++;
+      const v=factor();
+      steps.push({icon:'−',text:`Unary minus applied → <span class="num">${fmt(-v)}</span>`});
+      return -v;
+    }
+    throw new Error(`Unexpected token ${t.type} at position ${t.pos}`);
+  }
+  const result=expr();
+  eat(TokenType.EOF);
+  return{result,steps};
+}
+
+function fmt(n){
+  if(Number.isInteger(n))return String(n);
+  return parseFloat(n.toFixed(8)).toString();
+}
+
+function tokenClass(t){
+  if(t.type===TokenType.NUMBER)return'NUM';
+  if(t.type===TokenType.LPAREN||t.type===TokenType.RPAREN)return'PAREN';
+  if(t.type===TokenType.EOF)return'EOF';
+  return'OP';
+}
+
+function render(expr){
+  const out=document.getElementById('output');
+  const err=document.getElementById('err');
+  err.style.display='none';
+  if(!expr.trim()){out.innerHTML='<div class="empty">Enter an expression above to see the token pipeline</div>';return;}
+  let tokens,parsed;
+  try{tokens=lex(expr);}
+  catch(e){err.textContent='Lexer error: '+e.message;err.style.display='block';out.innerHTML='';return;}
+  try{parsed=parse(tokens);}
+  catch(e){err.textContent='Parse error: '+e.message;err.style.display='block';out.innerHTML=renderTokens(tokens);return;}
+  out.innerHTML=renderTokens(tokens)+renderSteps(parsed.steps)+renderResult(parsed.result,expr);
+}
+
+function renderTokens(tokens){
+  const chips=tokens.map(t=>`<div class="token ${tokenClass(t)}" title="pos: ${t.pos}">
+    <span class="tok-type">${t.type}</span>
+    <span class="tok-val">${t.raw||'∅'}</span>
+    <span class="tok-pos">pos ${t.pos}</span>
+  </div>`).join('');
+  return`<div class="section">
+    <div class="sec-head"><span class="sec-num">01</span><span class="sec-title">Token Stream (${tokens.length} tokens)</span></div>
+    <div class="tokens-grid">${chips}</div>
+  </div>`;
+}
+
+function renderSteps(steps){
+  if(!steps.length)return'';
+  const rows=steps.map((s,i)=>`<div class="step" style="animation-delay:${i*40}ms"><span class="step-icon">${s.icon}</span><span class="step-text">${s.text}</span></div>`).join('');
+  return`<div class="section">
+    <div class="sec-head"><span class="sec-num">02</span><span class="sec-title">Parse Steps (${steps.length} operations)</span></div>
+    <div class="parse-steps">${rows}</div>
+  </div>`;
+}
+
+function renderResult(result,expr){
+  return`<div class="section">
+    <div class="sec-head"><span class="sec-num">03</span><span class="sec-title">Result</span></div>
+    <div class="result-box">
+      <div><div class="res-label">Final answer</div><div class="res-expr">${expr.trim()}</div></div>
+      <div class="res-val">${fmt(result)}</div>
+    </div>
+  </div>`;
+}
+
+function setExpr(v){document.getElementById('expr').value=v;render(v);}
+document.getElementById('expr').addEventListener('input',e=>render(e.target.value));
+render('');
+</script>
+</body>
+</html>
